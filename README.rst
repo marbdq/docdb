@@ -31,7 +31,7 @@ Installation
 
     or
 
-    $ easy_install docdb
+    easy_install docdb
 
 
 Links
