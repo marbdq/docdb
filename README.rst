@@ -14,7 +14,9 @@ Basic usage
     True
     >>> db.get('key')
     u'value'
+
     or
+
     >>> db['key'] = 'value'
     True
     >>> db['key']
