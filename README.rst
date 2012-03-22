@@ -7,7 +7,7 @@ Test
 .....
 
 Basic usage
-```````````
+............
 
     >>> import docdb
     >>> db = docdb.DocDB()
