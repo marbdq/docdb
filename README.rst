@@ -1,7 +1,8 @@
 docDB
 =====
 
-docDB is a simple to use, lightweight and fast document database on top of SQLite, MySQL and Posgre. It has a versioning system, so that all changes for a key are stored and can be reverted.
+docDB is a simple to use, lightweight and fast document database on top of SQLite, MySQL and Posgre.
+It has a versioning system, so that all changes for a key are stored and can be reverted.
 
 docDB has no external dependencies, and comes under a MIT license.
 
