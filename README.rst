@@ -1,9 +1,9 @@
 docDB
-``````
+
 docDB is a simploe to use, lightweight and fast document database on top of SQLite, MySQL and Posgre.
 
 Basic usage
-------------
+````````````
 
     >>> import docdb
     >>> db = docdb.DocDB()
@@ -22,13 +22,13 @@ Basic usage
 
 
 Installation
--------------
+``````````````
 
     $ pip install docdb
 
 
 Links
-------
+``````
 
 * `website <http://xxx/>`_
 * `documentation <http://xxx>`_
