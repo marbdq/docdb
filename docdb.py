@@ -1,7 +1,7 @@
 #! /usr/local/bin/python2.7
 #coding=utf-8
 
-#  docdb: Simple Document DB
+#  docdb: Simple Document DB.
 #
 #  Copyright (C) 2012 Miguel Rodriguez (marbdq@gmail.com)
 #
