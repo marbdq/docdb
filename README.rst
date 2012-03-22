@@ -29,6 +29,10 @@ Installation
 
     $ pip install docdb
 
+    or
+
+    $ easy_install docdb
+
 
 Links
 ------
