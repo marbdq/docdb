@@ -12,13 +12,11 @@ Basic usage
 
     >>> db.set('key', 'value')
     True
-
     >>> db.get('key')
     u'value'
-
+    or
     >>> db['key'] = 'value'
     True
-
     >>> db['key']
     u'value'
 
