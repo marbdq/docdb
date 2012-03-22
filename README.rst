@@ -31,7 +31,11 @@ Installation
 
     or
 
-    easy_install docdb
+    $ easy_install docdb
+
+    or
+
+    Download, and python setup.py install
 
 
 Links
