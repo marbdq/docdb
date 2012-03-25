@@ -42,11 +42,16 @@ Basic usage:
     >>> u'testing'
 """
 
-import sqlite3
 import json
-import os
 import unittest
 import time
+import sys
+import os
+PATH = os.path.dirname(__file__)
+
+if 'gluon.dal' not in sys.modules and 'dal' not in sys.modules:
+    sys.path.append(PATH)
+    from dal import DAL, Field
 
 
 class DocDB(object):
@@ -57,23 +62,32 @@ class DocDB(object):
         db:          db connection object
     """
 
-    def __init__(self, dbpath=os.path.join(os.path.dirname(__file__), 'db0.db')):
+    def __init__(self, connection="sqlite://%s/temp.db" % PATH, pool_size=0):
         """
         Generates a connection with the given DB file.
         @dbpath: path to the sqlite file to use. If None given, a default db0.db file will be created.
         """
-        self._dbpath = dbpath
-        self._db = sqlite3.Connection(self._dbpath)
-        self._db.execute('CREATE TABLE IF NOT EXISTS document (id integer primary key autoincrement, \
-                          key text, data text, valid integer)')
-        self._db.execute('CREATE INDEX IF NOT EXISTS keyx ON document (key)')
+        self._connection = connection
+        self._db = DAL(self._connection, pool_size=pool_size)
+        self._db.define_table('documents',
+                              Field('key'),
+                              Field('data'),
+                              Field('valid', 'boolean'))
+        if not self._db(self._db.documents).count():
+            try:
+                self._db.executesql('CREATE INDEX keyx ON documents (key)') #CREATE INDEX IF NOT EXISTS
+            except Exception, ex:
+                if 'index keyx already exists' not in ex.args:
+                    raise
 
     def get(self, key):
         """
         Searches and returns the doc for a given key.
         """
-        for doc in self._db.execute('select data from document where key == ? and valid == 1', (key,)):
-            return json.loads(doc[0])
+        db = self._db
+        doc = db((db.documents.key==key) & (db.documents.valid==True)).select(db.documents.data).first()
+        if doc:
+            return json.loads(doc['data'])
         return None
 
     def set(self, key, doc):
@@ -81,25 +95,12 @@ class DocDB(object):
         Inserts a document (doc) into the DB.
         @doc: can be of any python data structure (string, number, dict, list, ...
         """
+        db = self._db
         data = json.dumps(doc)
-        self._db.execute('UPDATE document SET valid = 0 WHERE key == ?', (key,))
-        self._db.execute('insert into document (key, data, valid) values (?, ?, 1)', (key, data,))
-        self._db.commit()
+        db((db.documents.key==key) & (db.documents.valid==True)).update(valid=False)
+        db.documents.insert(key=key, data=data, valid=True)
+        db.commit()
         return True
-
-    def mget(self, *args):
-        """
-        Searches and returns the docs for a set of keys.
-        Example: db.mget('key1', 'key2', 'key3')
-        Or:
-            >>> l = ['key1', 'key2', 'key3']
-            >>> db.mget(*l)
-        """
-        results = []
-        for key in args:
-            for doc in self._db.execute('select key, data from document where key == ? and valid == 1', (key,)):
-                results.append((doc[0], json.loads(doc[1])))
-        return results
 
     def mset(self, *args):
         """
@@ -108,51 +109,71 @@ class DocDB(object):
             >>> l = [('key1', {'key': 'value'}), ('key2', {'key': 'value'}), ('key3', {'key': 'value'})]
             >>> db.mset(*l)
         """
+        db = self._db
         counter = 0
         for doc in args:
-            data = json.dumps(doc[1])
-            self._db.execute('UPDATE document SET valid = 0 WHERE key == ?', (doc[0],))
-            self._db.execute('insert into document (key, data, valid) values (?, ?, 1)', (doc[0], data))
+            key, data = doc
+            data = json.dumps(data)
+            db((db.documents.key==key) & (db.documents.valid==True)).update(valid=False)
+            db.documents.insert(key=key, data=data, valid=True)
             counter += 1
             if counter > 1000:
-                self._db.commit()
+                db.commit()
                 counter = 0
-        self._db.commit()
+        db.commit()
         return True
-
 
     def versions(self, key):
         """
         Lists all the documents related to a key.
         """
+        db = self._db
         results = []
-        for doc in self._db.execute('select id, data from document where key == ?', (key,)):
-            id, doc = doc
-            result = json.loads(doc)
-            results.append((id, result))
+        for doc in db(db.documents.key == key).select():
+            id, data, valid = doc['id'], json.loads(doc['data']), doc['valid']
+            results.append((id, data, valid))
         return results
+
+    def revert(self, key, version):
+        """
+        Reverts to a previous version of the document.
+        """
+        db = self._db
+        vers = self.versions(key)
+        for doc in vers:
+            id, data, valid = doc
+            if id == version:
+                db((db.documents.key==key) & (db.documents.valid==True)).update(valid=False)
+                db(db.documents.id==id).update(valid=True)
+                db.commit()
+                return True
+        return False
 
     def info(self):
         """
         Returns a dict with info about the current DB (including db filesize, number of keys, etc.).
         """
-        import os
-        dbsize = '{0} MB'.format(os.path.getsize(self._dbpath)/1024.0/1024.0) if self._dbpath != ':memory:' else -1
-        keys = [doc for doc in self._db.execute('select count(*) from document where valid == 1')]
-        keys = keys[0][0] if keys else keys
-        return {'dbsize': dbsize, 'keys': keys}
+        dbsize = -1
+        if self._connection.startswith('sqlite://') and ':memory:' not in self._connection:
+            import os
+            path = os.path.getsize(self._connection[8:])
+            dbsize = '%.2f MB' % (path/1048576.0)
+        db = self._db
+        num_keys = db(db.documents.valid==True).count()
+        return dict(keys=num_keys, dbsize=dbsize)
 
     def keys(self):
         """
         Returns a list of ALL the keys in the current DB.
         """
-        return [doc[0] for doc in self._db.execute('select key from document where valid == 1')]
+        db = self._db
+        return [doc['key'] for doc in db(db.documents.valid==True).select(db.documents.key)]
 
     def flushall(self):
         """
         Deletes ALL the content from the DB.
         """
-        self._db.execute('DROP TABLE document')
+        self._db.documents.drop()
         self._db.commit()
         self.__init__()
         return True
@@ -161,11 +182,12 @@ class DocDB(object):
         """
         Deletes ALL the versions for a given document or the entire DB.
         """
+        db = self._db
         if key:
-            self._db.execute('DELETE FROM document WHERE key == ? and valid == 0', (key,))
+            db((db.documents.key==key) & (db.documents.valid==False)).delete()
         else:
-            self._db.execute('DELETE FROM document WHERE valid == 0')
-        self._db.commit()
+            db(db.documents.valid==False).delete()
+        db.commit()
         return True
 
     def __contains__(self, item):
@@ -225,14 +247,6 @@ class TestDocDB(unittest.TestCase):
         result = self.db.mset(*l)
         self.assertTrue(result)
 
-    def test_4_mget(self):
-        """
-        Tests getting several documents in the same request.
-        """
-        result = self.db.mget('one', 'two', 'three')
-        expected = [(u'one', {u'key': 1}), (u'two', {u'key': 2}), (u'three', {u'key': 3})]
-        self.assertEqual(result, expected)
-
     def test_5_versions(self):
         """
         Tests getting all the existing versions of a given key.
@@ -240,7 +254,7 @@ class TestDocDB(unittest.TestCase):
         self.db['key_versions'] = 'versions'
         self.db['key_versions'] = 'versions_modified'
         versions = self.db.versions('key_versions')
-        expected = [(7, u'versions'), (8, u'versions_modified')]
+        expected = [(7, u'versions', False), (8, u'versions_modified', True)]
         self.assertEqual(versions, expected)
 
     def test_6_info(self):
@@ -283,8 +297,8 @@ class BenchmarkDocDB(unittest.TestCase):
     Tests for the DocDb module. All the features should be tested.
     """
     def setUp(self):
-        self.db = DocDB(':memory:')
-        self.reqs = 1000
+        self.db = DocDB() #'sqlite://:memory:'
+        self.reqs = 100
         self.t0 = time.clock()
 
     def test_1_set(self):
@@ -303,13 +317,6 @@ class BenchmarkDocDB(unittest.TestCase):
             l.append((str(i), i))
         self.db.mset(*l)
         print 'test_3_mset:', self.reqs/(time.clock())-self.t0, 'req/s'
-
-    def test_4_mget(self):
-        l = []
-        for i in range(self.reqs):
-            l.append(str(i))
-        result = self.db.mget(*l)
-        print 'test_4_mget:', self.reqs/(time.clock())-self.t0, 'req/s'
 
     def test_cleanup(self):
         self.db.flushall()
