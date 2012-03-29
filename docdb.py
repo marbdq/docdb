@@ -4,6 +4,7 @@
 #  docdb: Simple Document DB...
 #
 #  Copyright (C) 2012 Miguel Rodriguez (marbdq@gmail.com)
+#  docdb uses dal.py, a web2py component (www.web2py.com).
 #
 
 __version__ = 0.1
@@ -21,8 +22,6 @@ DocDB objects have these methods:
                     When successfull True is returned. If a document is
                     updated, the previous version is stored (and accessible
                     through versions().
- - mget(*args):     Multiple get. Receives multiple arguments, and returns
-                    the related documents.
  - mset(*args):     Multiple set. Receives multiple tuples (key, doc) as
                     arguments, and stores the documents for the given keys.
  - versions(key):   Returns all the history of documents stored under a
@@ -49,36 +48,64 @@ import sys
 import os
 PATH = os.path.dirname(__file__)
 
-if 'gluon.dal' not in sys.modules and 'dal' not in sys.modules:
-    sys.path.append(PATH)
+try:
+    from gluon.dal import DAL, Field
+except:
     from dal import DAL, Field
 
 
 class DocDB(object):
     """Creates instances of DocDB. Each instance will have a db connection.
 
-    Objects have the following private attributes:
-        dbpath:      db file path.
-        db:          db connection object
+    Extracted from web2py docs:
+    ---------------------------
+    Here are examples of connection strings for specific types of supported back-end databases
+    (in all cases, we assume the database is running from localhost on its default port and is named "test"):
+
+    SQLite	sqlite://storage.db
+    MySQL	mysql://username:password@localhost/test
+    PostgreSQL	postgres://username:password@localhost/test
+    MSSQL	mssql://username:password@localhost/test
+    FireBird	firebird://username:password@localhost/test
+    Oracle	oracle://username/password@test
+    DB2	db2://username:password@test
+    Ingres	ingres://username:password@localhost/test
+    Informix	informix://username:password@test
+    Google App Engine/SQL	google:sql
+    Google App Engine/NoSQL	google:datastore
+
+    Notice that in SQLite the database consists of a single file. If it does not exist, it is created.
+    This file is locked every time it is accessed. In the case of MySQL, PostgreSQL, MSSQL, FireBird,
+    Oracle, DB2, Ingres and Informix the database "test" MUST exist.
+
     """
 
-    def __init__(self, connection="sqlite://%s/temp.db" % PATH, pool_size=0):
+    def __init__(self, conn='sqlite://'+PATH+'/temp.db', pool_size=0, migrate=True):
         """
-        Generates a connection with the given DB file.
-        @dbpath: path to the sqlite file to use. If None given, a default db0.db file will be created.
+        Generates a connection with the given DB.
+        @connection: system path to the sqlite file to use or DB connection string. If None given,
+        a default temp.db file will be created.
         """
-        self._connection = connection
-        self._db = DAL(self._connection, pool_size=pool_size)
+        if '://' not in conn:
+            print """Connection string needed!\n
+Some examples:\n
+SQLite  sqlite://storage.db
+MySQL   mysql://username:password@localhost/test
+PostgreSQL  postgres://username:password@localhost/test
+            """
+            sys.exit(2)
+        self._db = DAL(conn, pool_size=pool_size)
         self._db.define_table('documents',
-                              Field('key'),
-                              Field('data'),
-                              Field('valid', 'boolean'))
+                   Field('key'),
+                   Field('data', 'text'),
+                   Field('valid', 'boolean'),
+                   migrate = migrate)
+
         if not self._db(self._db.documents).count():
             try:
                 self._db.executesql('CREATE INDEX keyx ON documents (key)') #CREATE INDEX IF NOT EXISTS
-            except Exception, ex:
-                if 'index keyx already exists' not in ex.args:
-                    raise
+            except Exception:
+                self._db.rollback()
 
     def get(self, key):
         """
@@ -154,11 +181,9 @@ class DocDB(object):
         Returns a dict with info about the current DB (including db filesize, number of keys, etc.).
         """
         dbsize = -1
-        if self._connection.startswith('sqlite://') and ':memory:' not in self._connection:
-            import os
-            path = os.path.getsize(self._connection[8:])
-            dbsize = '%.2f MB' % (path/1048576.0)
         db = self._db
+        if self._dbengine == "postgres":
+            dbsize = db.executesql("SELECT pg_size_pretty(pg_database_size('%s'));" % self.dbname)[0][0]
         num_keys = db(db.documents.valid==True).count()
         return dict(keys=num_keys, dbsize=dbsize)
 
@@ -172,10 +197,11 @@ class DocDB(object):
     def flushall(self):
         """
         Deletes ALL the content from the DB.
+        TODO: Use truncate.
         """
-        self._db.documents.drop()
+        self._db.documents.truncate()
         self._db.commit()
-        self.__init__()
+        #self.__init__()
         return True
 
     def compact(self, key=None):
@@ -308,7 +334,7 @@ class BenchmarkDocDB(unittest.TestCase):
 
     def test_2_get(self):
         for i in range(self.reqs):
-            doc = self.db[str(i)]
+            _ = self.db[str(i)]
         print 'test_2_get:', self.reqs/(time.clock())-self.t0, 'req/s'
 
     def test_3_mset(self):
