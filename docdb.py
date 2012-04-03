@@ -47,6 +47,7 @@ import time
 import sys
 import os
 PATH = os.path.dirname(__file__)
+sys.path.append(PATH)
 
 try:
     from gluon.dal import DAL, Field
@@ -80,21 +81,22 @@ class DocDB(object):
 
     """
 
-    def __init__(self, conn='sqlite://'+PATH+'/temp.db', pool_size=0, migrate=True):
+    def __init__(self, conn='sqlite://temp.db', pool_size=0, migrate=True):
         """
         Generates a connection with the given DB.
         @connection: system path to the sqlite file to use or DB connection string. If None given,
         a default temp.db file will be created.
         """
         if '://' not in conn:
-            print """Connection string needed!\n
-Some examples:\n
-SQLite  sqlite://storage.db
-MySQL   mysql://username:password@localhost/test
-PostgreSQL  postgres://username:password@localhost/test
+            print """Connection string needed!\n \
+                  Some examples:\n \
+                  SQLite  sqlite://storage.db
+                  MySQL   mysql://username:password@localhost/test \
+                  PostgreSQL  postgres://username:password@localhost/test
             """
             sys.exit(2)
-        self._db = DAL(conn, pool_size=pool_size)
+        self._conn = conn
+        self._db = DAL(conn, folder=PATH, pool_size=pool_size)
         self._db.define_table('documents',
                    Field('key'),
                    Field('data', 'text'),
@@ -129,7 +131,7 @@ PostgreSQL  postgres://username:password@localhost/test
         db.commit()
         return True
 
-    def mset(self, *args):
+    def mset(self, docs):
         """
         Inserts a set of documents into the DB.
         Example:
@@ -138,7 +140,7 @@ PostgreSQL  postgres://username:password@localhost/test
         """
         db = self._db
         counter = 0
-        for doc in args:
+        for doc in docs:
             key, data = doc
             data = json.dumps(data)
             db((db.documents.key==key) & (db.documents.valid==True)).update(valid=False)
@@ -182,7 +184,7 @@ PostgreSQL  postgres://username:password@localhost/test
         """
         dbsize = -1
         db = self._db
-        if self._dbengine == "postgres":
+        if "postgres" in self._conn:
             dbsize = db.executesql("SELECT pg_size_pretty(pg_database_size('%s'));" % self.dbname)[0][0]
         num_keys = db(db.documents.valid==True).count()
         return dict(keys=num_keys, dbsize=dbsize)
@@ -240,7 +242,7 @@ class TestDocDB(unittest.TestCase):
         """
         Creates a DB connection for each test.
         """
-        self.db = DocDB()
+        self.db = DocDB(migrate=True)
 
     def test_1_set(self):
         """
@@ -270,7 +272,7 @@ class TestDocDB(unittest.TestCase):
         Tests inserting several documents per batch.
         """
         l = [('one', {'key': 1}), ('two', {'key': 2}), ('three', {'key': 3})]
-        result = self.db.mset(*l)
+        result = self.db.mset(l)
         self.assertTrue(result)
 
     def test_5_versions(self):
@@ -323,7 +325,7 @@ class BenchmarkDocDB(unittest.TestCase):
     Tests for the DocDb module. All the features should be tested.
     """
     def setUp(self):
-        self.db = DocDB() #'sqlite://:memory:'
+        self.db = DocDB(migrate=True) #'sqlite://:memory:'
         self.reqs = 100
         self.t0 = time.clock()
 
@@ -341,7 +343,7 @@ class BenchmarkDocDB(unittest.TestCase):
         l = []
         for i in range(self.reqs):
             l.append((str(i), i))
-        self.db.mset(*l)
+        self.db.mset(l)
         print 'test_3_mset:', self.reqs/(time.clock())-self.t0, 'req/s'
 
     def test_cleanup(self):
