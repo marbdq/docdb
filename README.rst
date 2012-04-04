@@ -9,7 +9,7 @@ docDB has no external dependencies, and comes under a MIT license.
 Basic usage
 ------------
 
-    >>> import docdb
+    >>> import docdb         #Add this 2 lines to a model, if you are using it from web2py
     >>> db = docdb.DocDB()
 
     >>> db.set('key', 'value')
