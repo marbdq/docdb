@@ -16,13 +16,35 @@ Basic usage
     True
     >>> db.get('key')
     u'value'
-
-    or
-
-    >>> db['key'] = 'value'
+    >>> db['key'] = 'value2'
     True
     >>> db['key']
     u'value'
+    
+    >>> db.versions('key')
+    [(1, u'value', False), (2, u'value1', True)] #Shows all historical values, version numbers and marks the current one to True
+
+    >>> db.revert('key', 2)
+    True
+    >>> db.versions('key')
+    [(1, u'value', False), (2, u'value1', True)]
+
+    >>> db['new_key'] = 'new value'
+    >>> db.keys()
+    ['key', 'new_key'] #Lists all existing keys in the DB.
+
+    >>> db.mset([('key3', 'value3'), ('key4', {'key': 'value'})])  #You can set multiple keys at the same go
+    True
+    >>> db.keys()
+    ['key', 'new_key', 'key3', 'key4']
+    
+    >>> db.compact() #You can delete old versions to save disk space
+    True
+    >>> db.versions('key')
+    [(2, u'value1', True)]  #Old versions have been removed!
+
+
+    
 
 
 Installation
