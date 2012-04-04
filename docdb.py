@@ -242,7 +242,7 @@ class TestDocDB(unittest.TestCase):
         """
         Creates a DB connection for each test.
         """
-        self.db = DocDB(migrate=True)
+        self.db = DocDB(conn='sqlite://test.db')
 
     def test_1_set(self):
         """
@@ -325,7 +325,7 @@ class BenchmarkDocDB(unittest.TestCase):
     Tests for the DocDb module. All the features should be tested.
     """
     def setUp(self):
-        self.db = DocDB(migrate=True) #'sqlite://:memory:'
+        self.db = DocDB(conn='sqlite://test.db') #'sqlite://:memory:'
         self.reqs = 100
         self.t0 = time.clock()
 
