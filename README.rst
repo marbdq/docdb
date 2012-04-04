@@ -43,7 +43,10 @@ Basic usage
     >>> db.versions('key')
     [(2, u'value1', True)]  #Old versions have been removed!
 
-
+    >>> db.flushall() #Deletes all DB records.
+    True
+    >>> db.info()
+    {'dbsize': -1, 'keys': 0}
     
 
 
