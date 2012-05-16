@@ -49,24 +49,3 @@ Basic usage
     {'dbsize': -1, 'keys': 0}
     
 
-
-Installation
-------------
-
-    $ pip install docdb
-
-    or
-
-    $ easy_install docdb
-
-    or
-
-    Download, and python setup.py install
-
-
-Links
-------
-
-* `website <http://xxx/>`_
-* `documentation <http://xxx>`_
-* `pypi <http://pypi.python.org/pypi/docdb>`_
